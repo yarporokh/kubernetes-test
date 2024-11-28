@@ -4,7 +4,7 @@ Maybe it's something I'm just learning
 - NodePort is used for requests from the outside (Ingress, Loadbalancer)
 
 
-  ```
+```
 kubectl apply -f {filename}.yaml
 kubectl delete -f {filename}.yaml
-  ```
+```
