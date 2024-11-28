@@ -1,0 +1,186 @@
+# ConfigMap Item Service
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: item-service-config
+  namespace: default
+data:
+  spring.datasource.url: jdbc:postgresql://postgres-service:5432/item-service
+  spring.datasource.username: root
+  spring.datasource.password: root
+  spring.application.name: item-service
+  eureka.client.serviceUrl.defaultZone: http://eureka-server.default.svc.cluster.local:8761/eureka/
+  spring.jpa.hibernate.ddl-auto: update
+  spring.datasource.driver-class-name: org.postgresql.Driver
+
+---
+
+# ConfigMap Discovery Server
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: discovery-server-config
+  namespace: default
+data:
+  spring.application.name: discovery-server
+  server.port: "8761"
+  eureka.instance.hostname: eureka-server.default.svc.cluster.local
+  eureka.client.register-with-eureka: "false"
+  eureka.client.fetch-registry: "false"
+
+---
+
+# Service PostgreSQL
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service
+  labels:
+    app: postgres
+spec:
+  ports:
+    - port: 5432
+  selector:
+    app: postgres
+
+---
+
+# Deployment PostgreSQL
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  labels:
+    app: postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres
+          env:
+            - name: POSTGRES_DB
+              value: item-service
+            - name: POSTGRES_USER
+              value: root
+            - name: POSTGRES_PASSWORD
+              value: root
+          ports:
+            - containerPort: 5432
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: postgres-data
+          persistentVolumeClaim:
+            claimName: postgres-pvc
+
+---
+
+# PersistentVolumeClaim PostgreSQL
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+
+---
+
+# Service Discovery Server
+apiVersion: v1
+kind: Service
+metadata:
+  name: eureka-server
+  labels:
+    app: eureka
+spec:
+  ports:
+    - port: 8761
+  selector:
+    app: eureka
+
+---
+
+# Deployment Discovery Server
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: eureka-server
+  labels:
+    app: eureka
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: eureka
+  template:
+    metadata:
+      labels:
+        app: eureka
+    spec:
+      containers:
+        - name: eureka-server
+          image: limon4ikk/test-discovery-server:1.0
+          ports:
+            - containerPort: 8761
+          envFrom:
+            - configMapRef:
+                name: discovery-server-config
+
+---
+
+# Service Item Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: item-service
+  labels:
+    app: item-service
+spec:
+  type: NodePort
+  ports:
+    - port: 8080
+      targetPort: 8080
+      nodePort: 30080
+  selector:
+    app: item-service
+
+---
+
+# Deployment Item Service
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: item-service
+  labels:
+    app: item-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: item-service
+  template:
+    metadata:
+      labels:
+        app: item-service
+    spec:
+      containers:
+        - name: item-service
+          image: limon4ikk/test-item-service:1.0
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: item-service-config
